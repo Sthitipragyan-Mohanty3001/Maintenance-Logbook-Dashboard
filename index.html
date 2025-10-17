@@ -42,141 +42,127 @@
 </div>
 
 <script>
-    // Pre-filled machines data
-    const defaultMachines = [
-        { name: "Drilling Machine", lastMaintenance: "2025-09-01", nextDue: "2026-08-31", status: "OK" },
-        { name: "Lathe Machine", lastMaintenance: "2025-09-20", nextDue: "2025-10-20", status: "OK" },
-        { name: "Milling Machine", lastMaintenance: "2025-10-01", nextDue: "2025-10-10", status: "OK" },
-        { name: "Refrigerator Unit", lastMaintenance: "2024-11-01", nextDue: "2025-10-01", status: "⚠️ DUE" },
-        { name: "Packaging Unit", lastMaintenance: "2023-05-01", nextDue: "2024-10-10", status: "⚠️ DUE" },
-        { name: "Excavator", lastMaintenance: "2025-10-01", nextDue: "2025-10-10", status: "OK" },
-        { name: "Loader", lastMaintenance: "2024-06-01", nextDue: "2029-01-09", status: "OK" },
-        { name: "CNC Machine", lastMaintenance: "2022-10-13", nextDue: "2027-10-12", status: "OK" },
-        { name: "Molders", lastMaintenance: "2025-03-01", nextDue: "2026-02-01", status: "OK" },
-        { name: "Grinding Machine", lastMaintenance: "2024-10-01", nextDue: "2025-10-10", status: "⚠️ DUE" },
-        { name: "Press Machine", lastMaintenance: "2025-09-12", nextDue: "2026-02-21", status: "OK" },
-        { name: "Forklifts", lastMaintenance: "2025-10-17", nextDue: "2027-01-03", status: "OK" },
-        { name: "Mixer", lastMaintenance: "2024-12-30", nextDue: "2025-12-11", status: "OK" },
-        { name: "Blender", lastMaintenance: "2024-11-01", nextDue: "2025-12-14", status: "OK" },
-        { name: "Furnace", lastMaintenance: "2025-10-01", nextDue: "2026-11-23", status: "⚠️ DUE" }
-    ];
+let logbook = []; // will hold machines in memory
+let chartInstance;
 
-    // Load or initialize logbook
-    if (!localStorage.getItem('logbook')) {
-        localStorage.setItem('logbook', JSON.stringify(defaultMachines));
+// Show Add Machine form
+function showAddForm() {
+    document.getElementById('formDiv').style.display = 'block';
+}
+
+// Add new machine in memory
+function addMachine() {
+    const name = document.getElementById('machineName').value.trim();
+    const lastDate = document.getElementById('lastMaintenance').value;
+    const dueDays = parseInt(document.getElementById('dueDays').value);
+
+    if (!name || !lastDate || !dueDays) { 
+        alert("❌ Please fill all fields!"); 
+        return; 
     }
 
-    function showAddForm() {
-        document.getElementById('formDiv').style.display = 'block';
-    }
+    const nextDue = new Date(lastDate);
+    nextDue.setDate(nextDue.getDate() + dueDays);
 
-    function addMachine() {
-        const name = document.getElementById('machineName').value.trim();
-        const lastDate = document.getElementById('lastMaintenance').value;
-        const dueDays = parseInt(document.getElementById('dueDays').value);
+    const machine = {
+        name: name,
+        lastMaintenance: lastDate,
+        nextDue: nextDue.toISOString().split('T')[0],
+        status: "OK"
+    };
 
-        if (!name || !lastDate || !dueDays) { alert("❌ Please fill all fields!"); return; }
+    logbook.push(machine);
 
-        const nextDue = new Date(lastDate);
-        nextDue.setDate(nextDue.getDate() + dueDays);
+    alert(`✅ Machine '${name}' added successfully.`);
+    document.getElementById('formDiv').style.display = 'none';
+    document.getElementById('machineName').value = '';
+    document.getElementById('lastMaintenance').value = '';
+    document.getElementById('dueDays').value = '';
 
-        const machine = {
-            name: name,
-            lastMaintenance: lastDate,
-            nextDue: nextDue.toISOString().split('T')[0],
-            status: "OK"
-        };
-
-        const logbook = JSON.parse(localStorage.getItem('logbook'));
-        logbook.push(machine);
-        localStorage.setItem('logbook', JSON.stringify(logbook));
-
-        alert(`✅ Machine '${name}' added successfully.`);
-        document.getElementById('formDiv').style.display = 'none';
-        document.getElementById('machineName').value = '';
-        document.getElementById('lastMaintenance').value = '';
-        document.getElementById('dueDays').value = '';
-        viewLogbook();
-    }
-
-    function viewLogbook() {
-        const logbook = JSON.parse(localStorage.getItem('logbook'));
-        if (logbook.length === 0) {
-            document.getElementById('logbookDiv').innerHTML = "<p>No machines added yet.</p>";
-            document.getElementById('complianceDiv').innerHTML = "";
-            updateChart(0,0);
-            return;
-        }
-
-        const today = new Date();
-        let okCount = 0, dueCount = 0;
-
-        let html = `<table>
-            <tr>
-                <th>Machine Name</th>
-                <th>Last Maintenance</th>
-                <th>Next Due Date</th>
-                <th>Status</th>
-            </tr>`;
-
-        logbook.forEach(machine => {
-            // Correct date comparison
-            const dueDate = new Date(machine.nextDue);
-            machine.status = (dueDate <= today) ? "⚠️ DUE" : "OK";
-
-            html += `<tr>
-                <td>${machine.name}</td>
-                <td>${machine.lastMaintenance}</td>
-                <td>${machine.nextDue}</td>
-                <td>${machine.status}</td>
-            </tr>`;
-
-            if(machine.status === "OK") okCount++;
-            else dueCount++;
-        });
-
-        // Save updated status
-        localStorage.setItem('logbook', JSON.stringify(logbook));
-
-        html += `</table>`;
-        document.getElementById('logbookDiv').innerHTML = html;
-
-        // Compliance %
-        const compliance = ((okCount / logbook.length) * 100).toFixed(1);
-        document.getElementById('complianceDiv').innerHTML = `✅ Compliance: ${compliance}%`;
-
-        updateChart(okCount, dueCount);
-    }
-
-    let chartInstance;
-    function updateChart(ok, due) {
-        const ctx = document.getElementById('statusChart').getContext('2d');
-        if(chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['OK', 'DUE'],
-                datasets: [{
-                    label: 'Number of Machines',
-                    data: [ok,due],
-                    backgroundColor: ['#28a745','#dc3545']
-                }]
-            },
-            options: {
-                responsive:true,
-                plugins:{
-                    legend:{display:false},
-                    title:{display:true,text:'Machine Maintenance Status'}
-                },
-                scales:{ y:{ beginAtZero:true, precision:0 } }
-            }
-        });
-    }
-
-    // Auto-render
     viewLogbook();
+}
+
+// Render logbook table and update compliance/chart
+function viewLogbook() {
+    if (logbook.length === 0) {
+        document.getElementById('logbookDiv').innerHTML = "<p>No machines added yet.</p>";
+        document.getElementById('complianceDiv').innerHTML = "";
+        updateChart(0,0);
+        return;
+    }
+
+    const today = new Date();
+    let okCount = 0, dueCount = 0;
+
+    let html = `<table>
+        <tr>
+            <th>Machine Name</th>
+            <th>Last Maintenance</th>
+            <th>Next Due Date</th>
+            <th>Status</th>
+        </tr>`;
+
+    logbook.forEach(machine => {
+        const dueDate = new Date(machine.nextDue);
+        machine.status = (dueDate <= today) ? "⚠️ DUE" : "OK";
+
+        html += `<tr>
+            <td>${machine.name}</td>
+            <td>${machine.lastMaintenance}</td>
+            <td>${machine.nextDue}</td>
+            <td>${machine.status}</td>
+        </tr>`;
+
+        if(machine.status === "OK") okCount++;
+        else dueCount++;
+    });
+
+    html += `</table>`;
+    document.getElementById('logbookDiv').innerHTML = html;
+
+    const compliance = ((okCount / logbook.length) * 100).toFixed(1);
+    document.getElementById('complianceDiv').innerHTML = `✅ Compliance: ${compliance}%`;
+
+    updateChart(okCount, dueCount);
+}
+
+// Update Chart.js bar chart
+function updateChart(ok, due) {
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    if(chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['OK', 'DUE'],
+            datasets: [{
+                label: 'Number of Machines',
+                data: [ok,due],
+                backgroundColor: ['#28a745','#dc3545']
+            }]
+        },
+        options: {
+            responsive:true,
+            plugins:{
+                legend:{display:false},
+                title:{display:true,text:'Machine Maintenance Status'}
+            },
+            scales:{ y:{ beginAtZero:true, precision:0 } }
+        }
+    });
+}
+
+// Fetch data from machines.json in the repo
+fetch('machines.json')
+    .then(response => response.json())
+    .then(data => {
+        logbook = data;
+        viewLogbook();
+    })
+    .catch(err => {
+        console.error("Failed to load dataset:", err);
+        document.getElementById('logbookDiv').innerHTML = "<p>Failed to load machine data.</p>";
+    });
 </script>
+
 </body>
 </html>
-
-
