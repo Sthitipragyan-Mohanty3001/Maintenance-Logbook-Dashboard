@@ -6,63 +6,17 @@
 <title>Machine Maintenance Logbook</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        background: #f5f5f5;
-        margin: 0;
-        padding: 20px;
-    }
-    h1 {
-        text-align: center;
-    }
-    .container {
-        max-width: 900px;
-        margin: auto;
-        background: #fff;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    button {
-        margin: 5px;
-        padding: 10px 20px;
-        font-size: 16px;
-        border-radius: 8px;
-        border: none;
-        cursor: pointer;
-        background-color: #007BFF;
-        color: white;
-    }
-    button:hover {
-        background-color: #0056b3;
-    }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-    }
-    th, td {
-        padding: 10px;
-        border: 1px solid #ddd;
-        text-align: center;
-    }
-    th {
-        background-color: #007BFF;
-        color: white;
-    }
-    input {
-        padding: 8px;
-        margin: 5px 0;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    #chartContainer {
-        margin-top: 30px;
-    }
-    .compliance {
-        font-size: 18px;
-        margin-top: 20px;
-    }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+    h1 { text-align: center; }
+    .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    button { margin: 5px; padding: 10px 20px; font-size: 16px; border-radius: 8px; border: none; cursor: pointer; background-color: #007BFF; color: white; }
+    button:hover { background-color: #0056b3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
+    th { background-color: #007BFF; color: white; }
+    input { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+    #chartContainer { margin-top: 30px; }
+    .compliance { font-size: 18px; margin-top: 20px; }
 </style>
 </head>
 <body>
@@ -71,8 +25,6 @@
     <h1>📘 Machine Maintenance Logbook</h1>
 
     <button onclick="showAddForm()">Add Machine</button>
-    <button onclick="viewLogbook()">View Logbook</button>
-    <button onclick="checkDue()">Check Due Maintenance</button>
 
     <div id="formDiv" style="display:none; margin-top: 20px;">
         <h3>Add Machine</h3>
@@ -90,9 +42,16 @@
 </div>
 
 <script>
-    // Initialize logbook in localStorage
+    // Pre-filled machines data
+    const defaultMachines = [
+        { name: "Drilling Machine", lastMaintenance: "2025-09-01", nextDue: "2026-08-31", status: "OK" },
+        { name: "Lathe Machine", lastMaintenance: "2025-09-20", nextDue: "2025-10-20", status: "OK" },
+        { name: "Milling Machine", lastMaintenance: "2025-10-01", nextDue: "2025-10-10", status: "OK" }
+    ];
+
+    // Load or initialize logbook
     if (!localStorage.getItem('logbook')) {
-        localStorage.setItem('logbook', JSON.stringify([]));
+        localStorage.setItem('logbook', JSON.stringify(defaultMachines));
     }
 
     function showAddForm() {
@@ -104,10 +63,7 @@
         const lastDate = document.getElementById('lastMaintenance').value;
         const dueDays = parseInt(document.getElementById('dueDays').value);
 
-        if (!name || !lastDate || !dueDays) {
-            alert("❌ Please fill all fields!");
-            return;
-        }
+        if (!name || !lastDate || !dueDays) { alert("❌ Please fill all fields!"); return; }
 
         const nextDue = new Date(lastDate);
         nextDue.setDate(nextDue.getDate() + dueDays);
@@ -136,9 +92,12 @@
         if (logbook.length === 0) {
             document.getElementById('logbookDiv').innerHTML = "<p>No machines added yet.</p>";
             document.getElementById('complianceDiv').innerHTML = "";
-            updateChart(0, 0);
+            updateChart(0,0);
             return;
         }
+
+        const today = new Date();
+        let okCount = 0, dueCount = 0;
 
         let html = `<table>
             <tr>
@@ -148,73 +107,62 @@
                 <th>Status</th>
             </tr>`;
 
-        let okCount = 0;
-        let dueCount = 0;
-
         logbook.forEach(machine => {
+            // Correct date comparison
+            const dueDate = new Date(machine.nextDue);
+            machine.status = (dueDate <= today) ? "⚠️ DUE" : "OK";
+
             html += `<tr>
                 <td>${machine.name}</td>
                 <td>${machine.lastMaintenance}</td>
                 <td>${machine.nextDue}</td>
                 <td>${machine.status}</td>
             </tr>`;
-            if (machine.status === "OK") okCount++;
+
+            if(machine.status === "OK") okCount++;
             else dueCount++;
         });
+
+        // Save updated status
+        localStorage.setItem('logbook', JSON.stringify(logbook));
 
         html += `</table>`;
         document.getElementById('logbookDiv').innerHTML = html;
 
         // Compliance %
-        const compliance = logbook.length ? ((okCount / logbook.length) * 100).toFixed(1) : 0;
+        const compliance = ((okCount / logbook.length) * 100).toFixed(1);
         document.getElementById('complianceDiv').innerHTML = `✅ Compliance: ${compliance}%`;
 
         updateChart(okCount, dueCount);
     }
 
-    function checkDue() {
-        const logbook = JSON.parse(localStorage.getItem('logbook'));
-        const today = new Date().toISOString().split('T')[0];
-
-        logbook.forEach(machine => {
-            machine.status = (machine.nextDue <= today) ? "⚠️ DUE" : "OK";
-        });
-
-        localStorage.setItem('logbook', JSON.stringify(logbook));
-        alert("✅ Maintenance status updated.");
-        viewLogbook();
-    }
-
     let chartInstance;
     function updateChart(ok, due) {
         const ctx = document.getElementById('statusChart').getContext('2d');
-        if (chartInstance) chartInstance.destroy();
+        if(chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: ['OK', 'DUE'],
                 datasets: [{
                     label: 'Number of Machines',
-                    data: [ok, due],
-                    backgroundColor: ['#28a745', '#dc3545']
+                    data: [ok,due],
+                    backgroundColor: ['#28a745','#dc3545']
                 }]
             },
             options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false },
-                    title: { display: true, text: 'Machine Maintenance Status' }
+                responsive:true,
+                plugins:{
+                    legend:{display:false},
+                    title:{display:true,text:'Machine Maintenance Status'}
                 },
-                scales: {
-                    y: { beginAtZero: true, precision: 0 }
-                }
+                scales:{ y:{ beginAtZero:true, precision:0 } }
             }
         });
     }
 
-    // Initial render
+    // Auto-render
     viewLogbook();
 </script>
-
 </body>
 </html>
