@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Machine Maintenance Logbook</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f5f5f5;
+        margin: 0;
+        padding: 20px;
+    }
+    h1 {
+        text-align: center;
+    }
+    .container {
+        max-width: 900px;
+        margin: auto;
+        background: #fff;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    button {
+        margin: 5px;
+        padding: 10px 20px;
+        font-size: 16px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        background-color: #007BFF;
+        color: white;
+    }
+    button:hover {
+        background-color: #0056b3;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th, td {
+        padding: 10px;
+        border: 1px solid #ddd;
+        text-align: center;
+    }
+    th {
+        background-color: #007BFF;
+        color: white;
+    }
+    input {
+        padding: 8px;
+        margin: 5px 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    #chartContainer {
+        margin-top: 30px;
+    }
+    .compliance {
+        font-size: 18px;
+        margin-top: 20px;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📘 Machine Maintenance Logbook</h1>
+
+    <button onclick="showAddForm()">Add Machine</button>
+    <button onclick="viewLogbook()">View Logbook</button>
+    <button onclick="checkDue()">Check Due Maintenance</button>
+
+    <div id="formDiv" style="display:none; margin-top: 20px;">
+        <h3>Add Machine</h3>
+        <input type="text" id="machineName" placeholder="Machine Name">
+        <input type="date" id="lastMaintenance">
+        <input type="number" id="dueDays" placeholder="Maintenance Interval (days)">
+        <button onclick="addMachine()">✅ Add Machine</button>
+    </div>
+
+    <div id="logbookDiv" style="margin-top: 20px;"></div>
+    <div class="compliance" id="complianceDiv"></div>
+    <div id="chartContainer">
+        <canvas id="statusChart"></canvas>
+    </div>
+</div>
+
+<script>
+    // Initialize logbook in localStorage
+    if (!localStorage.getItem('logbook')) {
+        localStorage.setItem('logbook', JSON.stringify([]));
+    }
+
+    function showAddForm() {
+        document.getElementById('formDiv').style.display = 'block';
+    }
+
+    function addMachine() {
+        const name = document.getElementById('machineName').value.trim();
+        const lastDate = document.getElementById('lastMaintenance').value;
+        const dueDays = parseInt(document.getElementById('dueDays').value);
+
+        if (!name || !lastDate || !dueDays) {
+            alert("❌ Please fill all fields!");
+            return;
+        }
+
+        const nextDue = new Date(lastDate);
+        nextDue.setDate(nextDue.getDate() + dueDays);
+
+        const machine = {
+            name: name,
+            lastMaintenance: lastDate,
+            nextDue: nextDue.toISOString().split('T')[0],
+            status: "OK"
+        };
+
+        const logbook = JSON.parse(localStorage.getItem('logbook'));
+        logbook.push(machine);
+        localStorage.setItem('logbook', JSON.stringify(logbook));
+
+        alert(`✅ Machine '${name}' added successfully.`);
+        document.getElementById('formDiv').style.display = 'none';
+        document.getElementById('machineName').value = '';
+        document.getElementById('lastMaintenance').value = '';
+        document.getElementById('dueDays').value = '';
+        viewLogbook();
+    }
+
+    function viewLogbook() {
+        const logbook = JSON.parse(localStorage.getItem('logbook'));
+        if (logbook.length === 0) {
+            document.getElementById('logbookDiv').innerHTML = "<p>No machines added yet.</p>";
+            document.getElementById('complianceDiv').innerHTML = "";
+            updateChart(0, 0);
+            return;
+        }
+
+        let html = `<table>
+            <tr>
+                <th>Machine Name</th>
+                <th>Last Maintenance</th>
+                <th>Next Due Date</th>
+                <th>Status</th>
+            </tr>`;
+
+        let okCount = 0;
+        let dueCount = 0;
+
+        logbook.forEach(machine => {
+            html += `<tr>
+                <td>${machine.name}</td>
+                <td>${machine.lastMaintenance}</td>
+                <td>${machine.nextDue}</td>
+                <td>${machine.status}</td>
+            </tr>`;
+            if (machine.status === "OK") okCount++;
+            else dueCount++;
+        });
+
+        html += `</table>`;
+        document.getElementById('logbookDiv').innerHTML = html;
+
+        // Compliance %
+        const compliance = logbook.length ? ((okCount / logbook.length) * 100).toFixed(1) : 0;
+        document.getElementById('complianceDiv').innerHTML = `✅ Compliance: ${compliance}%`;
+
+        updateChart(okCount, dueCount);
+    }
+
+    function checkDue() {
+        const logbook = JSON.parse(localStorage.getItem('logbook'));
+        const today = new Date().toISOString().split('T')[0];
+
+        logbook.forEach(machine => {
+            machine.status = (machine.nextDue <= today) ? "⚠️ DUE" : "OK";
+        });
+
+        localStorage.setItem('logbook', JSON.stringify(logbook));
+        alert("✅ Maintenance status updated.");
+        viewLogbook();
+    }
+
+    let chartInstance;
+    function updateChart(ok, due) {
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['OK', 'DUE'],
+                datasets: [{
+                    label: 'Number of Machines',
+                    data: [ok, due],
+                    backgroundColor: ['#28a745', '#dc3545']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'Machine Maintenance Status' }
+                },
+                scales: {
+                    y: { beginAtZero: true, precision: 0 }
+                }
+            }
+        });
+    }
+
+    // Initial render
+    viewLogbook();
+</script>
+
+</body>
+</html>
